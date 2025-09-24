@@ -1,8 +1,9 @@
-# Enlaces a repositorios en los que se trabajo aprendizaje supervisado
+# Enlaces a repositorios en los que se trabajó aprendizaje supervisado
 
+## Proyectos de Machine Learning
 
-https://github.com/aalejoz25/adult_income_prediction_EDA_ML
+- [**Adult Income Prediction - EDA & ML**](https://github.com/aalejoz25/adult_income_prediction_EDA_ML)
+  - Predicción de ingresos usando análisis exploratorio de datos y algoritmos de machine learning
 
-
-https://github.com/aalejoz25/scikit-learn_playground_synthetic_sets
-
+- [**Scikit-learn Playground - Synthetic Datasets**](https://github.com/aalejoz25/scikit-learn_playground_synthetic_sets)
+  - Experimentación con conjuntos de datos sintéticos usando scikit-learn
