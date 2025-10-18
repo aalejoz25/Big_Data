@@ -16,6 +16,8 @@
 \usepackage{multirow}
 \usepackage{array}
 \usepackage{longtable}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 
 \geometry{margin=2.5cm}
 \definecolor{codegreen}{rgb}{0,0.6,0}
@@ -44,18 +46,368 @@
 
 \lstset{style=mystyle}
 
-\title{Taller No. 3 - Algoritmos\\
+\title{Proyecto Módulo No Supervisado\\
 \large Maestría en Ciencias de Información y las Comunicaciones\\
 \large Big Data}
-\author{Álvaro Alejandro Zarabanda Gutiérrez\\Código: 20251595006}
+\author{Álvaro Alejandro Zarabanda Gutiérrez\\Código: 20251595006\\Youssef Alejandro Ortiz Vargas\\Código: 20251595004}
 \date{Octubre 2025}
 
 \begin{document}
 
 \maketitle
 
+\begin{abstract}
+Este informe presenta una evaluación de algoritmos de clustering no supervisado aplicados a un problema de clasificación binaria. Se implementó un enfoque semi-supervisado, en el que los modelos fueron entrenados sin etiquetas y evaluados posteriormente con métricas externas de clasificación, aprovechando las etiquetas reales para seleccionar el modelo óptimo. Se evaluaron 83 configuraciones de tres algoritmos: K-means, clustering jerárquico y DBSCAN, obteniendo 45 modelos válidos. El modelo K-means con K=4 clusters fue seleccionado como óptimo, alcanzando un F1-Score de 0.8598 y una precisión del 85.10\%. La metodología demuestra la efectividad de combinar agrupamiento no supervisado con evaluación supervisada parcial, permitiendo identificar el modelo más coherente con la estructura real de los datos.
+\end{abstract}
+
 \tableofcontents
 \newpage
+
+\section{Introducción}
+
+El clustering es una técnica esencial del aprendizaje no supervisado que busca descubrir patrones o estructuras naturales en los datos sin necesidad de etiquetas previas.
+No obstante, en muchos contextos reales se dispone de información parcial sobre las clases, lo que habilita enfoques semi-supervisados que combinan el agrupamiento no supervisado con una validación supervisada.
+
+Este trabajo aplica distintos algoritmos y configuraciones de clustering a un problema de clasificación binaria, con el objetivo de desarrollar un marco de evaluación que integre la exploración no supervisada con métricas supervisadas para seleccionar el modelo más representativo de la estructura real de los datos.
+
+\subsection{Objetivos}
+
+\textbf{Objetivo General:} Implementar y evaluar una metodología semi-supervisada para la selección óptima de algoritmos de clustering aplicados a clasificación binaria.
+
+\textbf{Objetivos Específicos:}
+\begin{itemize}
+    \item Implementar tres familias de algoritmos de clustering: K-means, clustering jerárquico y DBSCAN
+    \item Desarrollar un marco de evaluación que combine métricas no supervisadas y supervisadas
+    \item Analizar comparativamente el rendimiento de diferentes configuraciones algorítmicas
+    \item Generar predicciones finales para datos de prueba utilizando el modelo óptimo seleccionado
+\end{itemize}
+
+\section{Metodología}
+
+\subsection{Descripción del Dataset}
+
+El dataset utilizado proviene del archivo \texttt{dato\_taller.mat} y contiene:
+\begin{itemize}
+    \item \textbf{Datos de entrenamiento:} 1,000 muestras con 20 características (\texttt{x\_entena})
+    \item \textbf{Etiquetas de entrenamiento:} Vector binario con clases -1 y 1 (\texttt{y\_entrena})
+    \item \textbf{Datos de prueba:} 10,000 muestras con 20 características (\texttt{x\_prueba})
+    \item \textbf{Distribución de clases:} Clase -1: 469 muestras (46.9\%), Clase 1: 531 muestras (53.1\%)
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{img/eda.png}
+    \caption{EDA de los datos proporcionados en dato taller.mat}
+    \label{fig:eda}
+\end{figure}
+
+La figura~\ref{fig:pca} presenta la proyección bidimensional de los datos de entrenamiento mediante Kernel PCA con kernel RBF ($\gamma=0.1$). Los puntos azules representan la clase -1 y los rojos la clase +1. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{img/pca.png}
+    \caption{Proyección con Kernel PCA (RBF)}
+    \label{fig:pca}
+\end{figure}
+
+\subsection{Análisis exploratorio de los datos}
+
+Los resultados de la Figura~\ref{fig:eda} muestran 6 gráficas que permiten evaluar el balance de las clases y la distribución de los datos, así como una posible redundancia en las características
+
+\subsubsection{Distribución de clases}
+
+Las dos primeras gráficas muestran la distribución de clases en el conjunto de entrenamiento, tanto en forma de gráfico circular como de barras.
+Se puede observar un ligero desbalance entre las clases, donde la clase 1 representa el 53.1\% y la clase -1 representa el 46.9\%.
+
+Es un balance leve que se espera que no afecte de manera significativa la evaluación supervisada posterior, pero es bueno tenerlo en cuenta.
+
+\subsubsection{Media y desviación estándar}
+
+La tercera gráfica muestra la media y desviación estándar de cada una de las 20 características, de la que se puede evidenciar que las medias están centradas en 0, lo que indica que los datos ya fueron escalados y normalizados.
+
+Hay una dispersión entre características homogénea, con desviaciones estándar similares, lo que da a entender que ninguna variables es dominante con respecto a las otras, en cuanto a magnitud.
+
+\subsubsection*{3. Distribución de Valores}
+
+El histograma combinado de los conjuntos de entrenamiento y prueba muestra una superposición casi perfecta entre ambas distribuciones, lo cual indica que ambos provienen de la misma distribución estadística. 
+Esto sugiere que no existe sesgo de muestreo ni desplazamiento de datos (\textit{data drift}) entre ambos subconjuntos. 
+Además, la forma gaussiana de las distribuciones confirma que los datos fueron correctamente estandarizados, lo que garantiza comparabilidad entre las características y estabilidad en los modelos posteriores.
+
+\vspace{0.5em}
+
+\subsubsection*{4. Distribución de las Primeras 20 Características}
+
+Los diagramas de cajas y bigotes permiten visualizar la dispersión y la presencia de valores atípicos en las veinte características del conjunto de entrenamiento.
+Se observa que la mayoría de las variables presentan distribuciones centradas en cero, con rangos entre cuartiles similares, lo que refuerza la idea de homogeneidad entre las características. 
+Si bien existen algunos valores atípicos aislados, su número es reducido y no se espera que afecten de manera significativa el desempeño de los algoritmos de clustering.
+
+\vspace{0.5em}
+
+\subsubsection*{5. Matriz de Correlación}
+
+La matriz de correlación correspondiente a las veinte características revela que las variables son prácticamente independientes entre sí, con coeficientes de correlación cercanos a cero fuera de la diagonal principal. 
+Esto sugiere una baja redundancia entre características. 
+En consecuencia, cada variable aporta información complementaria al conjunto de datos, lo que favorece la aplicación de métodos de reducción de dimensionalidad como \textit{PCA}, \textit{KernelPCA} o \textit{UMAP}.
+
+\vspace{0.5em}
+
+\subsubsection*{Conclusiones del Análisis Exploratorio}
+
+En conjunto, los resultados del análisis exploratorio indican que los datos se encuentran adecuadamente balanceados, normalizados y sin presencia de sesgos entre los subconjuntos de entrenamiento y prueba. 
+Las variables presentan independencia mutua y dispersión homogénea, lo que sugiere que el conjunto de datos está bien condicionado para la aplicación de técnicas de clustering y reducción de dimensionalidad.
+
+
+\subsection{Preprocesamiento}
+
+Se aplicó normalización estándar (z-score) a todas las características:
+\begin{equation}
+z = \frac{x - \mu}{\sigma}
+\end{equation}
+
+donde $\mu$ es la media y $\sigma$ la desviación estándar de cada característica en el conjunto de entrenamiento.
+
+\subsection{Configuración Experimental}
+
+Se implementó una evaluación exhaustiva con las siguientes configuraciones:
+
+\subsubsection{K-means}
+\begin{itemize}
+    \item Valores de K: 2, 3, 4, 5, 6, 8, 10
+    \item Inicialización: k-means++ con 10 inicializaciones aleatorias
+    \item Total de configuraciones: 7
+\end{itemize}
+
+\subsubsection{Clustering Jerárquico}
+\begin{itemize}
+    \item Métodos de enlace: ward, complete, average, single
+    \item Número de clusters: 2, 3, 4, 5, 6, 8, 10
+    \item Total de configuraciones: 28
+\end{itemize}
+
+\subsubsection{DBSCAN}
+\begin{itemize}
+    \item Valores de $\epsilon$: 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0
+    \item Valores de min\_samples: 3, 5, 10, 15, 20, 25
+    \item Total de configuraciones: 48
+\end{itemize}
+
+\subsection{Protocolo de Evaluación Semi-Supervisada}
+
+\begin{algorithm}
+\caption{Evaluación Semi-Supervisada de Clustering}
+\begin{algorithmic}[1]
+\State \textbf{Input:} $X_{train}$, $y_{train}$, algoritmos de clustering
+\State \textbf{Output:} Modelo óptimo con métricas de evaluación
+
+\For{cada algoritmo $A$ en \{K-means, Jerárquico, DBSCAN\}}
+    \For{cada configuración $C$ de parámetros}
+        \State Entrenar modelo $M_{A,C}$ con $X_{train}$
+        \State Obtener clusters $labels_{cluster} = M_{A,C}.predict(X_{train})$
+        
+        \If{clustering válido (sin clusters únicos)}
+            \State Calcular métricas no supervisadas: Silhouette, CH, DB
+            \State Mapear clusters a clases usando voto mayoritario
+            \State Calcular métricas supervisadas: F1, Accuracy, ARI, NMI
+            \State Almacenar resultado completo
+        \EndIf
+    \EndFor
+\EndFor
+
+\State Seleccionar mejor modelo por F1-Score para cada algoritmo
+\State Seleccionar modelo óptimo global por F1-Score
+\State Aplicar modelo óptimo a datos de prueba
+\end{algorithmic}
+\end{algorithm}
+
+\section{Resultados}
+
+\subsection{Evaluación Exhaustiva de Modelos}
+
+De las 83 configuraciones iniciales, se obtuvieron 45 modelos válidos distribuidos así:
+\begin{itemize}
+    \item \textbf{K-means:} 7 modelos válidos (100\% de éxito)
+    \item \textbf{Clustering Jerárquico:} 28 modelos válidos (100\% de éxito)
+    \item \textbf{DBSCAN:} 10 modelos válidos (20.8\% de éxito)
+\end{itemize}
+
+La baja tasa de éxito de DBSCAN se debe a que muchas configuraciones generaron un solo cluster o clusters con cardinalidad insuficiente para la evaluación semi-supervisada.
+
+\subsection{Mejores Modelos por Algoritmo}
+
+\begin{table}[H]
+\centering
+\caption{Mejores modelos por tipo de algoritmo}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Algoritmo} & \textbf{Configuración} & \textbf{F1-Score} & \textbf{Accuracy} & \textbf{Silhouette} & \textbf{ARI} \\
+\midrule
+K-means & K=4 & \textbf{0.8598} & \textbf{0.8510} & 0.0667 & 0.2452 \\
+Jerárquico & Ward, K=4 & 0.7462 & 0.7470 & 0.0429 & 0.1654 \\
+DBSCAN & $\epsilon=2.5$, min=3 & 0.7543 & 0.7290 & \textbf{0.0821} & 0.1432 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{img/metricas_desempeño_mejores_modelos.png}
+    \caption{Comparación de métricas de desempeño de mejores resultados entre modelos}
+\end{figure}
+
+\subsection{Análisis del Modelo Óptimo}
+
+El modelo K-means con K=4 clusters fue seleccionado como óptimo basado en el F1-Score. Sus características principales son:
+
+\begin{table}[H]
+\centering
+\caption{Métricas detalladas del modelo óptimo (K-means, K=4)}
+\begin{tabular}{lc}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+F1-Score & 0.8598 \\
+Accuracy & 0.8510 \\
+Precision & 0.8590 \\
+Recall (Sensibilidad) & 0.8606 \\
+Especificidad & 0.8401 \\
+Silhouette Score & 0.0667 \\
+Adjusted Rand Index & 0.2452 \\
+Normalized Mutual Information & 0.2613 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Matrices de Confusión}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{img/matrices_confusion.png}
+    \caption{Matrices de confusón de entrenamientos optimos por algoritmo}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Matriz de confusión del modelo óptimo}
+\begin{tabular}{cc|cc}
+\multicolumn{2}{c}{} & \multicolumn{2}{c}{\textbf{Predicción}} \\
+\multicolumn{2}{c|}{} & \textbf{Clase -1} & \textbf{Clase +1} \\
+\hline
+\multirow{2}{*}{\textbf{Real}} & \textbf{Clase -1} & 394 (TN) & 75 (FP) \\
+& \textbf{Clase +1} & 74 (FN) & 457 (TP) \\
+\end{tabular}
+\end{table}
+
+\subsection{Predicciones en Datos de Prueba}
+
+El modelo óptimo (K-means K=4) se aplicó a las 10,000 muestras de prueba, generando las siguientes predicciones:
+\begin{itemize}
+    \item \textbf{Clase -1:} 5,082 muestras (50.8\%)
+    \item \textbf{Clase +1:} 4,918 muestras (49.2\%)
+\end{itemize}
+
+La distribución de predicciones muestra un balance similar al conjunto de entrenamiento, sugiriendo consistencia en el modelo.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{img/output_datos_prueba.png}
+    \caption{EDA de los datos de prueba etiquetados por el modelo óptimo}
+\end{figure}
+
+\section{Análisis y Discusión}
+
+\subsection{Rendimiento del K-means}
+
+El algoritmo \textit{K-means} obtuvo el mejor desempeño global entre los modelos evaluados. 
+Su configuración óptima (\texttt{K=4}) alcanzó un \textit{F1-Score} de 0.8598 y una precisión del 85.10\%. 
+Este resultado puede explicarse por tres factores principales:
+
+\begin{itemize}
+    \item \textbf{Estructura de los datos:} El conjunto de características presenta varianzas similares y baja correlación entre variables, lo que favorece la formación de clusters.
+    \item \textbf{Escalamiento apropiado:} La estandarización previa de los datos garantiza que todas las características contribuyan de manera equilibrada al cálculo de distancias euclidianas, evitando el sesgo de magnitud que afectaría el agrupamiento.
+    \item \textbf{Estabilidad y consistencia:} Entre las 83 configuraciones probadas, \textit{K-means} mostró resultados estables y reproducibles, con bajo impacto del parámetro de inicialización (\texttt{n\_init=10}) y del estado aleatorio (\texttt{random\_state=42}).
+\end{itemize}
+
+\vspace{1em}
+
+\subsection{Limitaciones de DBSCAN}
+
+El algoritmo \textit{DBSCAN} presentó el peor desempeño general, con un \textit{F1-Score} promedio de 0.75 y precisión del 72.9\%. 
+Este comportamiento puede atribuirse a las siguientes causas:
+
+\begin{itemize}
+    \item \textbf{Sensibilidad a hiperparámetros:} Los valores de $\epsilon$ y \texttt{min\_samples} afectan significativamente la detección de regiones densas. 
+    En los experimentos, pequeñas variaciones en $\epsilon$ producían desde un único cluster hasta una sobrefragmentación de los datos.
+    \item \textbf{Alta dimensionalidad:} El conjunto de datos (20 dimensiones) reduce la efectividad de las métricas de densidad, ya que en espacios de alta dimensión las distancias tienden a homogenizarse.
+    \item \textbf{Distribución no uniforme:} Los datos no presentan regiones con densidades bien diferenciadas, lo que dificulta la segmentación natural que \textit{DBSCAN} requiere para funcionar correctamente.
+\end{itemize}
+
+\vspace{1em}
+
+\subsection{Clustering Jerárquico}
+
+El método jerárquico con criterio de enlace de Ward mostró un desempeño intermedio, con un \textit{F1-Score} de 0.7462. 
+Aunque inferior a \textit{K-means}, ofrece ventajas analíticas relevantes:
+
+\begin{itemize}
+    \item \textbf{Flexibilidad estructural:} Permite identificar relaciones jerárquicas entre grupos, evidenciadas mediante dendrogramas que reflejan la proximidad entre subconjuntos de datos.
+    \item \textbf{Determinismo:} A diferencia de \textit{K-means}, el clustering jerárquico no depende de inicializaciones aleatorias, proporcionando resultados reproducibles bajo las mismas condiciones.
+    \item \textbf{Interpretabilidad:} El dendrograma permite explorar diferentes niveles de segmentación y validar visualmente la coherencia entre clusters.
+\end{itemize}
+
+\vspace{1em}
+
+\subsection{Validación de la Metodología}
+
+La metodología desarrollada se basó en un proceso de evaluación \textbf{semi-supervisada}, en el cual los modelos se entrenaron de manera no supervisada y posteriormente fueron evaluados con base en etiquetas reales. 
+Este enfoque permitió cuantificar objetivamente la calidad de los agrupamientos a través de métricas externas de clasificación.
+
+\begin{itemize}
+    \item \textbf{Evaluación híbrida:} A pesar de que se usaron métricas intrínsecas (Silhouette, Calinski-Harabasz y Davies-Bouldin) y métricas extrínsecas (Accuracy, Precision, Recall, F1-Score y Especificidad), no todas fueron parte del crieterio de selección final, es decir que se usaron solamente para describir el comportamiento de los clusters.
+    \item \textbf{Selección objetiva:} La elección del modelo final se basó en el \textit{F1-Score}, al integrar simultáneamente precisión y sensibilidad.
+    \item \textbf{Rigurosidad experimental:} Se evaluaron 83 configuraciones y se retuvieron 45 modelos válidos, asegurando una comparación exhaustiva y reproducible.
+\end{itemize}
+
+\vspace{2em}
+
+\section{Conclusiones}
+
+\subsection{Principales Hallazgos}
+
+\begin{enumerate}
+    \item \textbf{Modelo óptimo:} El algoritmo \textit{K-means} con $K=4$ clusters alcanzó el mejor rendimiento global (\textit{F1-Score}: 0.8598).
+    \item \textbf{Metodología efectiva:} El esquema de evaluación semi-supervisada facilitó una comparación cuantitativa y objetiva entre los 45 modelos válidos obtenidos.
+    \item \textbf{Balance de métricas:} El modelo final mostró un equilibrio notable entre precisión (85.9\%) y \textit{recall} (86.1\%), indicando una alta coherencia entre las predicciones y las etiquetas reales.
+    \item \textbf{Complementariedad de métodos:} Aunque \textit{DBSCAN} y el clustering jerárquico tuvieron desempeños inferiores, aportaron información valiosa sobre la estructura local y global de los datos.
+\end{enumerate}
+
+\vspace{1em}
+
+\subsection{Limitaciones}
+
+\begin{itemize}
+    \item Los resultados se basan en un único conjunto de datos, por lo que la generalización del enfoque requiere validación adicional en otros dominios.
+    \item La metodología depende de la disponibilidad de etiquetas parciales para la evaluación supervisada.
+    \item El número de configuraciones evaluadas incrementa la carga computacional, lo que podría optimizarse mediante estrategias de búsqueda más eficientes.
+\end{itemize}
+
+
+% \textbf{Trabajo Futuro:}
+% \begin{itemize}
+%     \item Extensión a problemas multiclase
+%     \item Incorporación de algoritmos de clustering espectral y basados en grafos
+%     \item Desarrollo de métricas híbridas que combinen información supervisada y no supervisada
+%     \item Validación en datasets de diferentes dominios y características
+% \end{itemize}
+
+% \subsection{Impacto Práctico}
+
+% La metodología desarrollada tiene aplicaciones directas en:
+% \begin{itemize}
+%     \item \textbf{Análisis exploratorio:} Identificación de patrones en datos con etiquetado parcial
+%     \item \textbf{Selección de modelos:} Marco objetivo para comparar algoritmos de clustering
+%     \item \textbf{Problemas industriales:} Clasificación de datos con disponibilidad limitada de etiquetas
+%     \item \textbf{Investigación académica:} Protocolo estándar para evaluación de clustering semi-supervisado
+% \end{itemize}
 
 
 \end{document}
